@@ -15,7 +15,7 @@ class WorldDataset:
         self.indicators = indicators
 
     @classmethod
-    def from_api(cls, indicators: dict, years=range(2000, 2022)) -> "WorldDataset":
+    def from_api(cls, indicators: dict, years=2022) -> "WorldDataset":
         # --- Download the chosen indicators with the WB api and build the dataframe ---
 
         # --- Load and clean country metadata ---
