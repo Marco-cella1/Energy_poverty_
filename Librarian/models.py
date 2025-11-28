@@ -59,6 +59,9 @@ class WorldDataset:
 
         panel = panel.rename(columns={"economy": "country_code"})
 
+        # --- Remove the aggregates ---
+        panel = panel[panel["country_code"].isin(meta["id"])]
+
         # --- Convert energy_use_per_capita from kg oil eq to kWh per capita ---
         # --- 1 kg oil equivalent = 11.63 kWh --- 
         if "energy_use_per_capita" in panel.columns:
@@ -66,7 +69,7 @@ class WorldDataset:
             
             
 
-        # --- Clean the 'year' column (remove 'YR' prefix if present) --- 
+        # --- Clean the 'year' column (remove 'YR' prefix) ---
         panel["year"] = panel["year"].astype(str)
         panel["year"] = panel["year"].str.replace("YR", "", regex=False)
         panel["year"] = panel["year"].astype(int)
