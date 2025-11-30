@@ -19,26 +19,25 @@ world = load_world()
 
 # Main layout
 st.set_page_config(layout="wide")
-st.title("How to make people live longer (and better)?")
-
-
+st.title("How much energy do we need?")
 st.markdown("""The chart shows the energy consumption per capita on the x-axis and the life expectancy on the y-axis,
 with countries colored by regions.""")
 
 # Create two columns
 col_left, col_right = st.columns([3, 2])
 
-# Create the slider
+# --------- DATA INPUTS AND PROCESSING ------------
+
+# Create the year and threshold sliders
 with col_right:
     st.subheader("Options")
-    year = st.slider("Select a year", min_value=2000, max_value=2022, value=2000, step=1)
+    year = st.slider("Select a year", min_value=2000, max_value=2022, value=2022, step=1)
+    life_exp_target = st.slider("Select a threshold for life expectancy", min_value=50, max_value=83, value=50, step=1)
 
-
-
-# --- BUILD SNAPSHOT FOR SELECTED YEAR ---
-
+# Build the snapshot
 snapshot = world.full_snapshot(year,required=["energy_use_per_capita", "life_expectancy"])
 
+# Create the other options
 with col_right:
     # Region filter
     all_regions = sorted(snapshot["region_name"].dropna().unique())
@@ -50,33 +49,58 @@ with col_right:
 
     # Cobb Douglass button
     show_cobb = st.checkbox("Cobb–Douglas fit", value=False)
+    # Log scale button
     use_log_scale = st.checkbox("Log scale on energy axis", value=False)
 
-if selected_regions:  # if user deselects everything, keep empty
+
+# if user deselects everything, keep empty
+if selected_regions:
     snapshot = snapshot[snapshot["region_name"].isin(selected_regions)]
 
+# ------------- THRESHOLD APPLICATION -------------------------
+
+eligible = snapshot[snapshot["life_expectancy"] >= life_exp_target].copy()
+
+if eligible.empty:
+     best_countries = None
+     single_best = None
+     mean_energy = None
+else:
+     # Minimum energy use among eligible countries
+     single_best = eligible["energy_use_per_capita"].min()
+     # All countries above the limit
+     best_countries = eligible[eligible["energy_use_per_capita"] == single_best].copy()
+     # Mean energy use among all countries above the threshold
+     mean_energy = eligible["energy_use_per_capita"].mean()
+
+
+# -------------------- PRINT THE RESULTS -------------------------
+
 with col_right:
-    st.subheader("Description")
-    st.markdown("This chart illustrates the relationship between national energy consumption per capita and life expectancy.  \n"
-                "Energy consumption is used as a proxy for economic and social development, because "
-                "higher-income countries typically consume more energy through heating, cooling, transportation, industry, "
-                "and electrified public services such as hospitals, water treatment, and communication infrastructure.  \n"
-                "These systems directly support human health and longevity, making energy a strong explanatory variable for life expectancy and life quality in general."
-                )
-    st.markdown("Over the analyzed years, the global average energy use has remained relatively stable, oscillating between 24,000 "
-                "and 27,000 kWh per capita, while life expectancy has increased significantly, rising from about 67 to 73 years.  \n"
-                "This divergence reflects improvements in health systems, sanitation, and technology diffusing even in countries with modest energy growth. "
-                "Despite this, the cross-sectional pattern remains clear: countries with higher per-capita energy availability tend to achieve "
-                "higher life expectancy, whereas very low energy use remains associated with shorter lives.  \n"
-                "The goal of this chart is making this structural relationship immediately visible across regions and years.")
+    st.subheader("Results")
+    #if no data avaiable for a given threshold
+    if best_countries is None or best_countries.empty:
+        st.write(
+             f"No country in the selected regions reaches at least "
+            f"**{life_exp_target} years** of life expectancy in {year}.")
+    else:
+        names = ", ".join(best_countries["name"].fillna(best_countries["country_code"]))
+        st.write(
+            f"- **Best observed threshold** (minimum energy among countries "
+            f"with life expectancy ≥ {life_exp_target} years):\n"
+            f"  - {names} with **{single_best:,.0f} kWh/year per capita**.")
+        st.write(
+            f"- **Average energy use** among all countries above the threshold: "
+             f"**{mean_energy:,.0f} kWh/year per capita** "
+              f"({len(eligible)} countries)." )
 
 
 
-# --- PLOT SCATTER ---
+# ------------- PLOT SCATTER --------------------------
 
 fig, ax = plt.subplots(figsize=(6.5, 4)) # Dimesions
 sns.scatterplot(
-    data=snapshot,
+    data=eligible,
     x="energy_use_per_capita",
     y="life_expectancy",
     hue="region_name",
@@ -114,15 +138,15 @@ else:
 
 
 # Vertical line for energy use mean
-mean_energy = snapshot["energy_use_per_capita"].mean()
-ax.axvline(mean_energy, color="red", linestyle="--", linewidth=1.5, label=f"Mean: {mean_energy:,.0f} kWh")
+mean_energy = eligible["energy_use_per_capita"].mean()
+ax.axvline(mean_energy, color="red", linestyle="--", linewidth=1.5, label="Energy Mean")
 
 # Horizontal line for life expectancy mean
-mean_life_expectancy = snapshot["life_expectancy"].mean()
-ax.axhline(mean_life_expectancy, color="green", linestyle="--", linewidth=1.5, label=f"Mean: {mean_life_expectancy:,.0f} years")
+mean_life_expectancy = life_exp_target
+ax.axhline(mean_life_expectancy, color="green", linestyle="--", linewidth=1.5, label="Threshold")
 
 
-ax.set_title(f"Energy consumption and Life Expectancy ({year})")
+ax.set_title(f"Energy consumption threshold ({year})")
 ax.grid(alpha=0.3)
 ax.legend(title="Region", loc="lower right", fontsize=5)
 

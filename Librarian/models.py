@@ -14,6 +14,11 @@ class WorldDataset:
         self.meta = meta
         self.indicators = indicators
 
+    # -----------------------------------------------------------------------
+    # ----------------- DOWNLOAD DATA FROM WB API ---------------------------
+    # -----------------------------------------------------------------------
+
+
     @classmethod
     def from_api(cls, indicators: dict, years=2021) -> "WorldDataset":
         # --- Download the chosen indicators with the WB api and build the dataframe ---
@@ -21,7 +26,7 @@ class WorldDataset:
         # --- Load and clean country metadata ---
         meta = wb.economy.DataFrame()
         meta = meta.reset_index()
-        meta = meta[meta["aggregate"] == False]     # Remove unrecognized countries
+        meta = meta[meta["aggregate"] == False]     # Remove aggregates from metadata
         meta = meta[["id", "region", "name"]]       # Columns of meta dataframe
 
         # --- Download indicator data ---
@@ -31,8 +36,8 @@ class WorldDataset:
         )
 
         # --- WB api returns a dataframe with countries and indicators as rows, 
-        # and years as columns. So it neeeds to be reshaped as rows containing the year,
-        # the country id, an indicator and it's value --- 
+        # and years as columns. So it needs to be reshaped as rows containing the year,
+        # the country id, an indicator, and it's value ---
         
         
         # --- Reshape  ---
@@ -59,7 +64,7 @@ class WorldDataset:
 
         panel = panel.rename(columns={"economy": "country_code"})
 
-        # --- Remove the aggregates ---
+        # --- Remove the aggregates from the real data---
         panel = panel[panel["country_code"].isin(meta["id"])]
 
         # --- Convert energy_use_per_capita from kg oil eq to kWh per capita ---
@@ -76,6 +81,11 @@ class WorldDataset:
 
         return cls(panel=panel, meta=meta, indicators=indicators)
 
+    # -----------------------------------------------------------------------
+    # ------------------------ BUILD THE SNAPSHOT ---------------------------
+    # -----------------------------------------------------------------------
+
+
     def snapshot(self, year: int, dropna_cols=None) -> pd.DataFrame:
         # --- Return a dataframe for a single year ---
         
@@ -83,6 +93,12 @@ class WorldDataset:
         if dropna_cols is not None:     # Removes the countries with no data
             df = df.dropna(subset=dropna_cols)
         return df
+
+
+    # -----------------------------------------------------------------------
+    # ----------------------- ADD REGIONS -----------------------------------
+    # -----------------------------------------------------------------------
+
 
     def add_region_names(self, df: pd.DataFrame) -> pd.DataFrame:
         # --- Merge the two datadframes in one --- 
@@ -92,6 +108,32 @@ class WorldDataset:
             right_on="id",
             how="left"
         )
+
+    # -----------------------------------------------------------------------
+    # ------------- MAP REGION NAME AND COLOR TO COUNTRIES ------------------ previously done in every page
+    # -----------------------------------------------------------------------
+
+    def full_snapshot(self, year: int, required=None) -> pd.DataFrame:
+
+        # Get the basic snapshot
+        snap = self.snapshot(year, dropna_cols=required)
+
+        # Merge with metadata
+        snap = snap.merge(
+            self.meta,                  # your metadata (id, name, region)
+            left_on="country_code",
+            right_on="id",
+            how="left")
+
+        # Add readable region
+        from Librarian.config import REGION_NAME_MAP
+        snap["region_name"] = snap["region"].map(REGION_NAME_MAP).fillna("Other")
+
+        return snap
+
+
+
+
 
 
 class CobbDouglasFit:
